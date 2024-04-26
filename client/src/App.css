@@ -1,0 +1,131 @@
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.login-page {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* animation: scroll 100s linear infinite;
+  background: url('./assets/cloud-pattern.png'); */
+}
+
+/* @keyframes scroll {
+	100% {
+		background-position: 4000px -0px;
+	}
+} */
+
+.login-form-wrapper {
+  height: fit-content;
+  padding: 40px;
+  border: 1px #80808066 solid;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #f7f7f7;
+}
+
+.auth-error-message {
+  width: 60%;
+  color: red;
+  background-color: #ff000030;
+  border-radius: 5px;
+  padding: 15px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.header {
+  background-color: #a0c5cf;
+  width: 100%;
+  height: 70px;
+  padding-left: 15px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  justify-content: space-between;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/*
+.logo {
+  width: 55px;
+  height: 55px;
+  background-image: url('../public/logo.png');
+  background-size: cover;
+  margin-right: 30px;
+}
+ */
+
+.header-link {
+  text-decoration: none;
+  color: #161616;
+  margin-right: 10px;
+  transition: 0.2s;
+}
+
+.header-link:hover {
+  color: #16161696;
+  transition: 0.2s;
+}
+
+.footer {
+  background-color: #333333;
+  width: 100%;
+  height: 40px;
+  padding: 5px 15px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.footer-link {
+  text-decoration: none;
+  font-size: 11px;
+  color: white;
+  margin-right: 10px;
+}
+
+.content-wrapper {
+  height: 100%;
+  width: 100%;
+  padding: 10px 10%;
+  box-sizing: border-box;
+  background-color: white;
+}
+
+.content {
+  height: 100%;
+  width: 100%;
+  background-color: #e6eceb;
+  border-radius: 10px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.main-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.self-info-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: center;
+}
