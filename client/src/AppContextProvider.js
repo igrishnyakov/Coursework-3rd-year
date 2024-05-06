@@ -7,12 +7,12 @@ import { AuthService } from './services/auth.service'
 
 const authService = new AuthService()
 
-function AppContextProvider() {
+function AppContextProvider() { // контекст для всего приложения
     const [isLoggedIn, setIsLoggedIn] = useState(false)
     const [loading, setLoading] = useState(false)
     const [currentUserInfo, setCurrentUserInfo] = useState('')
 
-    function fetchData() {
+    function fetchData() { // запрос к сервису аутентификации
         setLoading(true)
         authService.checkSession().then(res => {
             if (res.success) {
@@ -28,13 +28,13 @@ function AppContextProvider() {
     }, [])
     return (
         <>
-            {!loading ? (
+            {!loading ? ( // данные уже загрузились -> отображаем App или LoginForm в зависимости от isLoggedIn
                 isLoggedIn ? (
                     <App currentUserInfo={currentUserInfo} />
                 ) : (
                     <LoginForm setCurrentUserInfo={v => setCurrentUserInfo(v)} setIsLoggedIn={() => setIsLoggedIn(true)} />
                 )
-            ) : (
+            ) : ( // данные ещё не загрузились -> отображаем спиннер загрузки
                 <>
                     <Spin
                         indicator={<LoadingOutlined style={{ fontSize: 100 }} />}

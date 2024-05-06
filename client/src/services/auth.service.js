@@ -1,6 +1,6 @@
 import { ApiService } from './api.service'
 
-export class AuthService {
+export class AuthService { // класс с методами для авторизации и регистрации пользователей
     apiService = new ApiService()
     checkSession() {
         return this.apiService.get('/checkSession')

@@ -1,6 +1,6 @@
 import { Button, Form, Input } from 'antd'
-import { useState } from 'react'
-import { AuthService } from './services/auth.service'
+import { useState } from 'react' // хук для измененения состояний компонента
+import { AuthService } from './services/auth.service' // класс с методами для авторизации и регистрации пользователей
 
 const validateMessages = {
     required: 'Обязательное поле!',
@@ -9,16 +9,16 @@ const validateMessages = {
 
 const authService = new AuthService()
 
-function LoginForm(props) {
-    const [isLogin, setIsLogin] = useState(true)
+function LoginForm(props) { // компонент React для формы и логики регистрации и авторизации
+    const [isLogin, setIsLogin] = useState(true) // хук для измененения состояний компонента
     const [authErrorMessage, setAuthErrorMessage] = useState('')
     const [form] = Form.useForm()
 
-    async function auth() {
+    async function auth() { // обработка авторизации или регистрации пользователя
         form
             .validateFields()
             .then(async () => {
-                if (form.getFieldsValue().passwordRepeat) {
+                if (form.getFieldsValue().passwordRepeat) { // если есть поле повторения пароля, то это регистрация
                     const res = await authService.register(form.getFieldsValue())
                     if (res.success) {
                         props.setCurrentUserInfo(res.userInfo)
@@ -26,7 +26,7 @@ function LoginForm(props) {
                     } else {
                         setAuthErrorMessage('Такой логин уже есть!')
                     }
-                } else {
+                } else { // если нет поля повторения пароля, это авторизация
                     const res = await authService.login(form.getFieldsValue())
                     if (res.success) {
                         props.setCurrentUserInfo(res.userInfo)
@@ -41,13 +41,13 @@ function LoginForm(props) {
             })
     }
 
-    function changeAuthType() {
+    function changeAuthType() { //смена - авторизация или регистрация
         setAuthErrorMessage('')
         setIsLogin(!isLogin)
         form.resetFields()
     }
 
-    async function repeatPasswordFieldValidation(formRecord) {
+    async function repeatPasswordFieldValidation(formRecord) { // проверка совпадения паролей
         const passwordField = formRecord.getFieldValue('password')
         const passwordRepeatField = formRecord.getFieldValue('passwordRepeat')
         if (passwordRepeatField && passwordField !== passwordRepeatField) {
