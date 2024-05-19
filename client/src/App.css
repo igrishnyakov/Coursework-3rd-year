@@ -1,5 +1,5 @@
 .app {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -43,14 +43,16 @@
 }
 
 .header {
-  background-color: #a0c5cf;
+  position: fixed;
+  background-color: #a4e2f5;
   width: 100%;
-  height: 70px;
+  height: 50px;
   padding-left: 15px;
   display: flex;
   align-items: center;
   box-sizing: border-box;
   justify-content: space-between;
+  z-index: 1000;
 }
 
 .header-nav {
@@ -84,7 +86,7 @@
 .footer {
   background-color: #333333;
   width: 100%;
-  height: 40px;
+  height: 30px;
   padding: 5px 15px;
   display: flex;
   align-items: center;
@@ -99,6 +101,7 @@
 }
 
 .content-wrapper {
+  margin-top: 50px;
   height: 100%;
   width: 100%;
   padding: 10px 10%;
@@ -128,4 +131,21 @@
   align-items: center;
   height: 100%;
   justify-content: center;
+}
+
+.edit-button-container {
+  display: flex;
+  justify-content: center; /* Центрирует кнопку по горизонтали */
+  align-items: center; /* Центрирует кнопку по вертикали */
+  width: 100%; /* Занимает всю ширину карточки */
+  position: absolute;
+  bottom: 0; /* Позиционирует контейнер внизу карточки */
+  left: 20%; /* Выравнивает контейнер по левому краю карточки */
+  margin: 12px;
+}
+
+@media (max-width: 768px) {
+  .edit-button-container {
+    left: 17%; /* Меньший отступ слева для мобильных устройств */
+  }
 }

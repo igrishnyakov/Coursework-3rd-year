@@ -68,8 +68,8 @@ function LoginForm(props) { // компонент React для формы и л�
                         validateMessages={validateMessages}
                     >
                         <Form.Item
-                            label='Логин'
-                            name='login'
+                            label='Эл. почта'
+                            name='email'
                             rules={[
                                 {
                                     required: true

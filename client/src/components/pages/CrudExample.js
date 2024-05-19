@@ -11,19 +11,19 @@ const columns = [
         key: 'id'
     },
     {
-        title: 'Название',
-        dataIndex: 'name',
-        key: 'name'
+        title: 'Заголовок',
+        dataIndex: 'title',
+        key: 'title'
     },
     {
-        title: 'Описание',
-        dataIndex: 'description',
-        key: 'description'
+        title: 'Текст',
+        dataIndex: 'text',
+        key: 'text'
     }
 ]
 
 function CrudExample(props) {
-    const isUserAdmin = props.currentUserInfo.role === 'admin'
+    const isUserOrg = props.currentUserInfo.role === 'org'
 
     const [items, setItems] = useState([])
     const [modalVisible, setModalVisible] = useState(false)
@@ -68,7 +68,7 @@ function CrudExample(props) {
     }, [])
     return (
         <>
-            {isUserAdmin ? (
+            {isUserOrg ? (
                 <Button type='primary' onClick={() => showItem()}>
                     Добавить
                 </Button>
@@ -94,12 +94,12 @@ function CrudExample(props) {
                 onCancel={() => close()}
                 centered
                 footer={[
-                    isUserAdmin ? (
+                    isUserOrg ? (
                         <Button type='primary' onClick={() => saveItem()} disabled={!itemRecord.name || !itemRecord.description}>
                             Сохранить
                         </Button>
                     ) : null,
-                    isUserAdmin && itemRecord.id ? (
+                    isUserOrg && itemRecord.id ? (
                         <Button danger onClick={() => removeItem(itemRecord.id)}>
                             Удалить
                         </Button>
@@ -110,7 +110,7 @@ function CrudExample(props) {
                 <Form labelAlign='left' labelCol={{ span: 4 }} wrapperCol={{ span: 18 }}>
                     <Form.Item label='Название'>
                         <Input
-                            disabled={!isUserAdmin}
+                            disabled={!isUserOrg}
                             onChange={v =>
                                 setItemRecord(prevState => {
                                     return { ...prevState, name: v.target.value }
@@ -121,7 +121,7 @@ function CrudExample(props) {
                     </Form.Item>
                     <Form.Item label='Описание'>
                         <Input
-                            disabled={!isUserAdmin}
+                            disabled={!isUserOrg}
                             onChange={v =>
                                 setItemRecord(prevState => {
                                     return { ...prevState, description: v.target.value }

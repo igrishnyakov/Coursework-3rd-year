@@ -1,7 +1,8 @@
 import { Route, Routes } from 'react-router-dom'
-import Main from './pages/Main'
-import SandBox from './pages/SandBox'
+import News from './pages/News'
+import Events from './pages/Events'
 import CrudExample from './pages/CrudExample'
+import Reports from './pages/Reports'
 
 function Content(props) {
     return (
@@ -9,8 +10,9 @@ function Content(props) {
             <div className='content-wrapper'>
                 <div className='content'>
                     <Routes>
-                        <Route path='/' element={<Main />} />
-                        <Route path='/sandbox' element={<SandBox />} />
+                        <Route path='/' element={<News currentUserInfo={props.currentUserInfo} />} />
+                        <Route path='/events' element={<Events currentUserInfo={props.currentUserInfo}/>} />
+                        <Route path='/reports' element={<Reports currentUserInfo={props.currentUserInfo}/>} />
                         <Route path='/crud-example' element={<CrudExample currentUserInfo={props.currentUserInfo} />} />
                     </Routes>
                 </div>

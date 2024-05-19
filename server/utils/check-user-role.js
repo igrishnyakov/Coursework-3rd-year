@@ -7,12 +7,15 @@ const cryptoKey = 'это_ключик_для_шифрования))'
 
 async function checkUserRole(clientRequest) {
     const sessionCookie = clientRequest.cookies['APP_SESSION']
-    const userName = aes.decryptText(sessionCookie, cryptoKey)
+    const userEmail = aes.decryptText(sessionCookie, cryptoKey)
     const result = await db.query(
-        'SELECT R.name as role FROM users U INNER JOIN roles R ON R.id = U.role WHERE U.login = $1',
-        [userName]
+        'SELECT * FROM organizer O WHERE O.email = $1',
+        [userEmail]
     )
-    return result.rows[0].role
+    if (result.rows[0])
+        return 'org'
+    else
+        return 'vol'
 }
 
 module.exports = { checkUserRole }
