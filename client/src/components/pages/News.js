@@ -1,4 +1,4 @@
-import { Card, Button, Modal, Form, Input, DatePicker } from 'antd'
+import { Card, Button, Modal, Form, Input } from 'antd'
 import moment from 'moment'
 import { ApiService } from '../../services/api.service'
 import { useEffect, useState } from 'react'
@@ -88,7 +88,7 @@ function News(props) {
                             <img alt="News" src={item.image_paths[0]}
                                  style={{ maxHeight: '280px', borderRadius: '10px', boxShadow: '0 4px 8px rgba(0,0,0,0.2)'}}
                             /> : null}
-                        onClick={() => showNews(item.id)} // возможно стоит вызов переделать как в CrudExample
+                        onClick={() => showNews(item.id)} // возможно стоит вызов переделать как в Application
                     >
                         <h3 style={{textAlign: 'center', marginTop: '-15px', marginBottom: '10px', fontSize: '16px'}} className="card-title">{item.title}</h3>
                         <Card.Meta
@@ -179,9 +179,15 @@ function News(props) {
                         />
                     </Form.Item>
                     <Form.Item label="Дата публикации">
-                        <DatePicker // мб onChange изменить
-                            value={moment(itemRecord.publication_date)}
-                            onChange={(date, dateString) => setItemRecord({ ...itemRecord, publication_date: dateString })}
+                        <Input
+                            type="date"
+                            disabled={!isUserOrg}
+                            onChange={v =>
+                                setItemRecord(prevState => {
+                                    return { ...prevState, publication_date: v.target.value }
+                                })
+                            }
+                            value={moment(itemRecord.publication_date).format('YYYY-MM-DD')}
                         />
                     </Form.Item>
                     <Form.List name="image_paths" initialValue={itemRecord.image_paths || []}>

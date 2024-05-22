@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import News from './pages/News'
 import Events from './pages/Events'
-import CrudExample from './pages/CrudExample'
+import Application from './pages/Application'
 import Reports from './pages/Reports'
 
 function Content(props) {
@@ -13,7 +13,7 @@ function Content(props) {
                         <Route path='/' element={<News currentUserInfo={props.currentUserInfo} />} />
                         <Route path='/events' element={<Events currentUserInfo={props.currentUserInfo}/>} />
                         <Route path='/reports' element={<Reports currentUserInfo={props.currentUserInfo}/>} />
-                        <Route path='/crud-example' element={<CrudExample currentUserInfo={props.currentUserInfo} />} />
+                        <Route path='/application' element={<Application currentUserInfo={props.currentUserInfo} />} />
                     </Routes>
                 </div>
             </div>

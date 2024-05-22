@@ -26,8 +26,8 @@ function Header(props) {
                     <Link className='header-link' to={'/reports'}>
                         Отчеты
                     </Link>
-                    <Link className='header-link' to={'/crud-example'}>
-                        Простой CRUD
+                    <Link className='header-link' to={'/application'}>
+                        Заявки
                     </Link>
                 </div>
                 <div style={{ marginRight: 10 }}>

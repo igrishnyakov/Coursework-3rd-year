@@ -1,4 +1,4 @@
-import { Card, Button, Modal, Form, Input, DatePicker } from 'antd'
+import { Card, Button, Modal, Form, Input } from 'antd'
 import moment from 'moment'
 import { ApiService } from '../../services/api.service'
 import { useEffect, useState } from 'react'
@@ -92,7 +92,7 @@ function Reports(props) {
                                      boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
                                  }}
                             /> : null}
-                        onClick={() => showReport(item.id)} // возможно стоит вызов переделать как в CrudExample
+                        onClick={() => showReport(item.id)} // возможно стоит вызов переделать как в Application
                     >
                         <h3 style={{textAlign: 'center', marginTop: '-15px', marginBottom: '10px', fontSize: '16px'}}
                             className="card-title">{item.title}</h3>
@@ -145,7 +145,7 @@ function Reports(props) {
                 centered // мб убрать
                 footer={[
                     isUserOrg ? (
-                        <Button type='primary' onClick={() => saveReport()} disabled={!itemRecord.event_id || !itemRecord.text}>
+                        <Button type='primary' onClick={() => saveReport()} disabled={!itemRecord.title ||!itemRecord.event_id || !itemRecord.text}>
                             Сохранить
                         </Button>
                     ) : null,
@@ -196,9 +196,10 @@ function Reports(props) {
                         />
                     </Form.Item>
                     <Form.Item label="Дата публикации">
-                        <DatePicker // мб onChange изменить
-                            value={moment(itemRecord.publication_date)}
-                            onChange={(date, dateString) => setItemRecord({ ...itemRecord, publication_date: dateString })}
+                        <Input
+                            type="date"
+                            value={moment(itemRecord.publication_date).format('YYYY-MM-DD')}
+                            onChange={(e) => setItemRecord({ ...itemRecord, publication_date: e.target.value })}
                         />
                     </Form.Item>
                     <Form.List name="image_paths" initialValue={itemRecord.image_paths || []}>
@@ -207,7 +208,7 @@ function Reports(props) {
                                 {fields.map((field, index) => (
                                     <Form.Item
                                         key={field.key}
-                                        label={index === 0 ? "URL фотографий" : ""}
+                                        label={index === 0 ? "URL изображений" : ""}
                                         required={false}
                                     >
                                         <Form.Item
