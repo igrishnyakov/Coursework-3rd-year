@@ -17,4 +17,6 @@ router.post('/event/:id/apply', eventController.applyForEvent)
 router.post('/event/:id/cancel-application', eventController.cancelApplication)
 router.get('/event/:id/participation-status/:volunteerId', eventController.getVolunteerParticipationStatus)
 
+router.get('/event/:id/report', eventController.generatePdfReport)
+
 module.exports = router

@@ -1,5 +1,9 @@
 const db = require('../db')
 const { checkUserRole } = require('../utils/check-user-role')
+const PdfPrinter = require('pdfmake')
+const fs = require('fs')
+const path = require('path')
+const moment = require('moment');
 
 class EventController {
     async createEvent(req, res) {
@@ -211,6 +215,97 @@ class EventController {
             res.json({ status: null })
         } catch (error) {
             res.status(500).send('Failed to retrieve participation status for event: ' + error.message)
+        }
+    }
+
+    async generatePdfReport(req, res) {
+        const eventId = req.params.id;
+
+        try {
+            const eventQuery = `
+                SELECT e.*, array_agg(c.category) as categories
+                FROM event e
+                         LEFT JOIN category_event ce ON e.id = ce.event_id
+                         LEFT JOIN category c ON ce.category_id = c.id
+                WHERE e.id = $1
+                GROUP BY e.id
+            `;
+            const eventResult = await db.query(eventQuery, [eventId]);
+
+            if (eventResult.rows.length === 0) {
+                return res.status(404).send('Event not found');
+            }
+
+            const event = eventResult.rows[0];
+
+            const volunteersQuery = `
+                SELECT v.*
+                FROM volunteer v
+                         JOIN (
+                    SELECT volunteer_id FROM designated_volunteer WHERE event_id = $1
+                    UNION
+                    SELECT volunteer_id FROM application WHERE event_id = $1 AND status_id = 3
+                ) AS combined ON v.id = combined.volunteer_id
+            `;
+            const volunteersResult = await db.query(volunteersQuery, [eventId]);
+
+            const volunteers = volunteersResult.rows;
+
+            // Define the PDF document structure
+            const fonts = {
+                NotoSans: {
+                    normal: path.join(__dirname, '..', 'fonts', 'NotoSans-Regular.ttf'),
+                    bold: path.join(__dirname, '..', 'fonts', 'NotoSans-Bold.ttf'),
+                    italics: path.join(__dirname, '..', 'fonts', 'NotoSans-Italic.ttf'),
+                    bolditalics: path.join(__dirname, '..', 'fonts', 'NotoSans-BoldItalic.ttf')
+                }
+            };
+            const printer = new PdfPrinter(fonts);
+            const docDefinition = {
+                content: [
+                    { text: event.title, style: 'header' },
+                    { text: `Категории: ${event.categories.join(', ')}`, style: 'subheader' },
+                    { text: `Описание: ${event.description}`, style: 'subheader' },
+                    { text: `Период проведения: ${moment(event.start_date_time).format('D MMMM YYYY, HH:mm')} - ${moment(event.end_date_time).format('D MMMM YYYY, HH:mm')}`, style: 'subheader' },
+                    { text: `Количество волонтеров: ${event.num_volunteers}`, style: 'subheader' },
+                    { text: `Задачи волонтеров: ${event.tasks_volunteers}`, style: 'subheader' },
+                    { text: `Условия: ${event.conditions}`, style: 'subheader' },
+                    { text: 'Список волонтеров:', style: 'header' },
+                    ...volunteers.map(volunteer => ({
+                        text: `${volunteer.last_name} ${volunteer.first_name} (${moment(volunteer.date_of_birth).format('DD.MM.YYYY')})`,
+                        style: 'subheader'
+                    }))
+                ],
+                styles: {
+                    header: {
+                        fontSize: 18,
+                        bold: true,
+                        margin: [0, 10, 0, 10]
+                    },
+                    subheader: {
+                        fontSize: 14,
+                        margin: [0, 5, 0, 5]
+                    }
+                },
+                defaultStyle: {
+                    font: 'NotoSans'
+                }
+            };
+            const pdfDoc = printer.createPdfKitDocument(docDefinition);
+            const chunks = [];
+            pdfDoc.on('data', chunk => {
+                chunks.push(chunk);
+            });
+            pdfDoc.on('end', () => {
+                const result = Buffer.concat(chunks);
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename=report_${eventId}.pdf`);
+                res.send(result);
+            });
+            pdfDoc.end();
+
+        } catch (error) {
+            res.status(500).send('Failed to generate report: ' + error.message);
         }
     }
 }

@@ -3,6 +3,7 @@ import { ApiService } from '../../services/api.service'
 import { useEffect, useState } from 'react'
 import moment from 'moment'
 import 'moment/locale/ru'
+import { saveAs } from 'file-saver'
 
 const apiService = new ApiService()
 
@@ -197,6 +198,20 @@ function Events(props) {
         })
     }
 
+    function generateReport(eventId) {
+        fetch(`http://localhost:3001/api/event/${eventId}/report`, {
+            method: 'GET',
+            credentials: 'include'
+        })
+            .then(res => res.blob())
+            .then(blob => {
+                saveAs(blob, `report_${eventId}.pdf`)
+            })
+            .catch(() => {
+                message.error('Не удалось создать отчет')
+            })
+    }
+
     useEffect(() => {
         if (itemRecord.id) {
             fetchEventVolunteers(itemRecord.id)
@@ -278,6 +293,15 @@ function Events(props) {
                 centered
                 width={850}
                 footer={[
+                    isUserOrg && (
+                        <Button
+                            type="primary"
+                            onClick={() => generateReport(itemRecord.id)}
+                            style={{ marginRight: '10px' }}
+                        >
+                            Сформировать отчет
+                        </Button>
+                    ),
                     <Button onClick={() => close()}>Закрыть</Button>
                 ]}
             >
@@ -329,7 +353,7 @@ function Events(props) {
                                         onClick={() => showVolunteerModal(volunteer)}
                                     >
                                         <List.Item.Meta
-                                            title={`${volunteer.first_name} ${volunteer.last_name}`}
+                                            title={`${volunteer.last_name} ${volunteer.first_name}`}
                                             description={`Дата рождения: ${moment(volunteer.date_of_birth).format('DD.MM.YYYY')}`}
                                         />
                                     </List.Item>
@@ -344,7 +368,7 @@ function Events(props) {
                             >
                                 {allVolunteers.map(volunteer => (
                                     <Select.Option key={volunteer.id} value={volunteer.id}>
-                                        {`${volunteer.first_name} ${volunteer.last_name}`}
+                                        {`${volunteer.last_name} ${volunteer.first_name}`}
                                     </Select.Option>
                                 ))}
                             </Select>
@@ -523,7 +547,7 @@ function Events(props) {
                 </Form>
             </Modal>
             <Modal
-                title={`${selectedVolunteer.first_name} ${selectedVolunteer.patronymic} ${selectedVolunteer.last_name}`}
+                title={`${selectedVolunteer.last_name} ${selectedVolunteer.first_name} ${selectedVolunteer.patronymic}`}
                 open={volunteerModalVisible}
                 onCancel={() => closeVolunteerModal()}
                 footer={[
