@@ -1,15 +1,26 @@
 import { Button } from 'antd'
-import { LogoutOutlined } from '@ant-design/icons'
-import { Link } from 'react-router-dom'
+import { LoginOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
+import {Link, useNavigate} from 'react-router-dom'
 import { AuthService } from '../services/auth.service'
 
 const authService = new AuthService()
 
 function Header(props) {
+    const navigate = useNavigate()
+
+    function login() {
+        navigate('/login')
+    }
+
     function logout() {
         authService.logout().then(() => {
-            document.location.reload()
+            window.location.href = '/'
+            //document.location.reload()
         })
+    }
+
+    function goToProfile() {
+        navigate('/profile')
     }
 
     return (
@@ -26,19 +37,34 @@ function Header(props) {
                     <Link className='header-link' to={'/reports'}>
                         Отчеты
                     </Link>
-                    <Link className='header-link' to={'/application'}>
-                        Заявки
-                    </Link>
+                    {props.isLoggedIn && (
+                        <Link className='header-link' to='/application'>
+                            Заявки
+                        </Link>
+                    )}
                 </div>
-                <div style={{ marginRight: 10 }}>
-					<span style={{ fontSize: '14px', marginRight: 15 }}>
-						Привет, {props.currentUserInfo.role === 'org' ? 'организатор' : 'волонтер'} {props.currentUserInfo.first_name}!
-					</span>
-                    <Button size='small' onClick={logout} type='text'>
-                        Выйти
-                        <LogoutOutlined />
-                    </Button>
-                </div>
+                {props.isLoggedIn ? (
+                    <div style={{ marginRight: 10 }}>
+                    <span style={{ fontSize: '14px', marginRight: 15 }}>
+                        Привет, {props.currentUserInfo.role === 'org' ? 'организатор' : 'волонтер'} {props.currentUserInfo.first_name}!
+                    </span>
+                        <Button size='small' onClick={goToProfile} type='text'>
+                            Личный кабинет
+                            <UserOutlined />
+                        </Button>
+                        <Button size='small' onClick={logout} type='text'>
+                            Выйти
+                            <LogoutOutlined />
+                        </Button>
+                    </div>
+                ) : (
+                    <div style={{ marginRight: 10 }}>
+                        <Button size='small' onClick={login} type='text' className='header-link'>
+                            Войти
+                            <LoginOutlined />
+                        </Button>
+                    </div>
+                )}
             </div>
         </>
     )

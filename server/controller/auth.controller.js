@@ -131,12 +131,15 @@ class AuthController {
         const checkResult = await db.query('SELECT * FROM volunteer WHERE email = $1', [userRecord.email])
         let response
         if (!checkResult.rows[0]) {
-            await db.query('INSERT INTO volunteer (email, password) values ($1, $2)', [
+            await db.query('INSERT INTO volunteer (first_name, last_name, date_of_birth, email, password) values ($1, $2, $3, $4, $5)', [
+                userRecord.first_name,
+                userRecord.last_name,
+                userRecord.date_of_birth,
                 userRecord.email,
                 md5(userRecord.password)
             ])
             const result = await db.query(
-                'SELECT V.id, V.email FROM volunteer V WHERE V.email = $1',
+                'SELECT V.id, V.email, V.first_name, V.last_name, V.date_of_birth FROM volunteer V WHERE V.email = $1',
                 [userRecord.email]
             )
             res.cookie('APP_SESSION', aes.encryptText(userRecord.email, cryptoKey), {
@@ -147,6 +150,9 @@ class AuthController {
                 userInfo: {
                     id: result.rows[0].id,
                     email: result.rows[0].email,
+                    first_name: result.rows[0].first_name,
+                    last_name: result.rows[0].last_name,
+                    date_of_birth: result.rows[0].date_of_birth,
                     role: 'vol'
                 }
             }

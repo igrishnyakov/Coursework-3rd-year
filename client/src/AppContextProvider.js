@@ -1,6 +1,5 @@
 import { Spin } from 'antd'
 import { LoadingOutlined } from '@ant-design/icons'
-import LoginForm from './LoginForm'
 import App from './App'
 import { useEffect, useState } from 'react'
 import { AuthService } from './services/auth.service'
@@ -20,7 +19,7 @@ function AppContextProvider() { // контекст для всего прило
                 setIsLoggedIn(true)
             }
             setLoading(false)
-        })
+        }).catch(() => setLoading(false))
     }
 
     useEffect(() => {
@@ -28,12 +27,8 @@ function AppContextProvider() { // контекст для всего прило
     }, [])
     return (
         <>
-            {!loading ? ( // данные уже загрузились -> отображаем App или LoginForm в зависимости от isLoggedIn
-                isLoggedIn ? (
-                    <App currentUserInfo={currentUserInfo} />
-                ) : (
-                    <LoginForm setCurrentUserInfo={v => setCurrentUserInfo(v)} setIsLoggedIn={() => setIsLoggedIn(true)} />
-                )
+            {!loading ? ( // данные уже загрузились -> отображаем App
+                <App currentUserInfo={currentUserInfo} isLoggedIn={isLoggedIn} setCurrentUserInfo={setCurrentUserInfo} setIsLoggedIn={setIsLoggedIn} />
             ) : ( // данные ещё не загрузились -> отображаем спиннер загрузки
                 <>
                     <Spin

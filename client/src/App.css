@@ -149,3 +149,12 @@
     left: 17%; /* Меньший отступ слева для мобильных устройств */
   }
 }
+
+.profile-form-wrapper {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.profile-form-wrapper .ant-form-item {
+  margin-bottom: 16px;
+}

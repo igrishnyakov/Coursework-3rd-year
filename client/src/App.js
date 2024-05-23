@@ -7,8 +7,8 @@ function App(props) {
     return (
         <>
             <div className='app'>
-                <Header currentUserInfo={props.currentUserInfo} />
-                <Content currentUserInfo={props.currentUserInfo} />
+                <Header currentUserInfo={props.currentUserInfo} isLoggedIn={props.isLoggedIn} />
+                <Content currentUserInfo={props.currentUserInfo} isLoggedIn={props.isLoggedIn} setCurrentUserInfo={props.setCurrentUserInfo} setIsLoggedIn={props.setIsLoggedIn} />
                 <Footer />
             </div>
         </>

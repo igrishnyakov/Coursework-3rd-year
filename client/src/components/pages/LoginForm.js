@@ -1,6 +1,6 @@
 import { Button, Form, Input } from 'antd'
 import { useState } from 'react' // хук для измененения состояний компонента
-import { AuthService } from './services/auth.service' // класс с методами для авторизации и регистрации пользователей
+import { AuthService } from '../../services/auth.service' // класс с методами для авторизации и регистрации пользователей
 
 const validateMessages = {
     required: 'Обязательное поле!',
@@ -23,6 +23,7 @@ function LoginForm(props) { // компонент React для формы и л�
                     if (res.success) {
                         props.setCurrentUserInfo(res.userInfo)
                         props.setIsLoggedIn()
+                        window.location.href = '/'
                     } else {
                         setAuthErrorMessage('Такой логин уже есть!')
                     }
@@ -31,6 +32,7 @@ function LoginForm(props) { // компонент React для формы и л�
                     if (res.success) {
                         props.setCurrentUserInfo(res.userInfo)
                         props.setIsLoggedIn()
+                        window.location.href = '/'
                     } else {
                         setAuthErrorMessage('Не верные логин или пароль!')
                     }
@@ -67,6 +69,38 @@ function LoginForm(props) { // компонент React для формы и л�
                         form={form}
                         validateMessages={validateMessages}
                     >
+                        {!isLogin ? (
+                            <>
+                                <Form.Item
+                                    label='Имя'
+                                    name='first_name'
+                                    rules={[{required: true}]}
+                                >
+                                    <Input allowClear />
+                                </Form.Item>
+                                <Form.Item
+                                    label='Фамилия'
+                                    name='last_name'
+                                    rules={[{required: true}]}
+                                >
+                                    <Input allowClear />
+                                </Form.Item>
+                                <Form.Item
+                                    label='Дата рождения'
+                                    name='date_of_birth'
+                                    labelCol={{ span: 10 }}
+                                    rules={[{ required: true }]}
+                                >
+                                    <Input
+                                        type="date"
+                                        onChange={e => form.setFieldsValue({ date_of_birth: e.target.value })}
+                                        //value={form.getFieldValue('date_of_birth')}
+                                    />
+                                </Form.Item>
+                            </>
+                        ) : (
+                            <></>
+                        )}
                         <Form.Item
                             label='Эл. почта'
                             name='email'
