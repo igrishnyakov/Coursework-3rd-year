@@ -54,7 +54,7 @@ class EventController {
         LEFT JOIN category_event ce ON e.id = ce.event_id
         LEFT JOIN category c ON ce.category_id = c.id
         GROUP BY e.id
-        ORDER BY e.id`
+        ORDER BY e.start_date_time DESC`
             const items = await db.query(query)
             res.json(items.rows)
         } catch (error) {
@@ -88,6 +88,10 @@ class EventController {
         }
         const id = req.params.id
         try {
+            const eventCheckResult = await db.query('SELECT id FROM event WHERE id = $1', [id])
+            if (eventCheckResult.rows.length === 0) {
+                return res.status(404).send('Event not found')
+            }
             await db.query('BEGIN') // начало транзакции
             await db.query('DELETE FROM category_event WHERE event_id = $1', [id])
             await db.query(`DELETE FROM event WHERE id = $1`, [id])
@@ -134,6 +138,10 @@ class EventController {
         }
     }
     async addVolunteerToEvent(req, res) {
+        const userRole = await checkUserRole(req)
+        if (userRole !== 'org') {
+            return res.status(403).send('You do not have rights to create/update event!')
+        }
         const { eventId, volunteerIds } = req.body
         try {
             await db.query('BEGIN');
@@ -148,6 +156,10 @@ class EventController {
         }
     }
     async removeVolunteerFromEvent(req, res) {
+        const userRole = await checkUserRole(req)
+        if (userRole !== 'org') {
+            return res.status(403).send('You do not have rights to create/update event!')
+        }
         const { eventId, volunteerId } = req.body;
         try {
             await db.query('BEGIN');

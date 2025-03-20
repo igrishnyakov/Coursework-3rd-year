@@ -1,4 +1,6 @@
 export class ApiService {
+    // Используем переменную окружения или значение по умолчанию
+    //#apiPath = '/api';
     #apiPath = 'http://localhost:3001/api'
 
     #makeRequest(url, options) {

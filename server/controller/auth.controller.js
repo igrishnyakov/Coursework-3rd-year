@@ -58,9 +58,7 @@ class AuthController {
                 })
             }
             else {
-                res.json({
-                    success: false
-                })
+                res.status(401).json({success: false})
             }
         }
     }
@@ -93,6 +91,7 @@ class AuthController {
                     volunteer_hours: resultVol.rows[0].volunteer_hours
                 }
             }
+            res.json(response)
         } else {
             const resultOrg = await db.query(
                 'SELECT O.id, O.first_name, O.last_name, O.patronymic, O.image_path, O.email, O.phone_number, O.description, O.date_of_birth, O.education, O.work_experience FROM organizer O WHERE O.email = $1 AND O.password = $2',
@@ -119,12 +118,13 @@ class AuthController {
                         work_experience: resultOrg.rows[0].work_experience
                     }
                 }
+                res.json(response)
             }
             else {
                 response = { success: false }
+                res.status(401).json(response)
             }
         }
-        res.json(response)
     }
     async register(req, res) {
         const userRecord = req.body
@@ -156,10 +156,11 @@ class AuthController {
                     role: 'vol'
                 }
             }
+            res.json(response)
         } else {
             response = { success: false }
+            res.status(409).json(response)
         }
-        res.json(response)
     }
     async logout(req, res) {
         res.clearCookie('APP_SESSION')

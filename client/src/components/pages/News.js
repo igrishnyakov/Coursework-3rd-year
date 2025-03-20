@@ -132,7 +132,7 @@ function News(props) {
                 <p style={{textAlign: 'justify', textJustify: 'inter-word', fontSize: '16px'}}>{itemRecord.text}</p>
             </Modal>
             <Modal
-                title={itemRecord.id ? 'Редактирование новости c id = ' + itemRecord.id : 'Добавление новости'}
+                title={itemRecord.id ? 'Редактирование новости' : 'Добавление новости'}
                 open={editModalVisible}
                 okText='Сохранить'
                 cancelText='Отмена'

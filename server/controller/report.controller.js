@@ -117,7 +117,7 @@ class ReportController {
                      LEFT JOIN image_report_con ON report.id = image_report_con.report_id
                      LEFT JOIN image_report ON image_report_con.image_id = image_report.id
             GROUP BY report.id
-            ORDER BY report.id
+            ORDER BY report.publication_date DESC
         `)
         res.json(items.rows)
     }

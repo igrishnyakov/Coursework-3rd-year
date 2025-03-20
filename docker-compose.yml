@@ -1,0 +1,60 @@
+version: '3'
+services:
+  database:
+    image: 'postgres:latest'
+    environment:
+      - 'POSTGRES_DB=${POSTGRES_DB}'
+      - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}' # изменить пароль для подключения
+      - 'POSTGRES_USER=${POSTGRES_USER}' # изменить пользователя
+    # При проксировании можно не открывать порты
+      #ports:
+      # - '5438:5432' #порт для отладки и подключения
+    networks:
+      - web-service-network
+
+  frontend:
+    build:
+      context: ./client
+    # При проксировании можно не открывать порты
+    # ports:
+    #   - "3000:3000" # Открыт для локального тестирования
+    networks:
+      - web-service-network
+    depends_on:
+      - backend
+    environment:
+      - BASE_URL=${BACKEND_API_URL}
+
+  backend:
+    build:
+      context: ./server
+    # При проксировании можно не открывать порты
+    # ports:
+    #   - "3001:3001" # Открыт для локального тестирования
+    environment:
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=database          # Ссылка на имя контейнера базы данных
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+    networks:
+      - web-service-network
+    depends_on:
+      - database
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf # Подключаем конфигурацию Nginx
+    # Точка входа в приложение
+    ports:
+      - "80:80" # Публичный порт для доступа к приложению
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - web-service-network
+
+networks:
+  web-service-network:
+    driver: bridge

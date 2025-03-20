@@ -118,7 +118,7 @@ class NewsController {
                      LEFT JOIN image_news_con ON news.id = image_news_con.news_id
                      LEFT JOIN image_news ON image_news_con.image_id = image_news.id
             GROUP BY news.id
-            ORDER BY news.id
+            ORDER BY news.publication_date DESC
         `)
         res.json(items.rows)
     }
