@@ -45,22 +45,28 @@ function Events(props) {
     function saveEvent() { // здесь возможно нужно вернуть к своему
         if (itemRecord.id) { // если есть id — редактируем (передаем id того, кто обновил)
             apiService.post('/event', { ...itemRecord, organizer_id: props.currentUserInfo.id }).then(() => {
+                message.success('Мероприятие сохранено')
                 close()
                 fetchData()
             })
+            .catch(() => message.error('Не удалось сохранить'))
         } else { // если нет id — создаем (передаем id того, кто создал)
             apiService.post('/event', { ...itemRecord, organizer_id: props.currentUserInfo.id }).then(() => {
+                message.success('Мероприятие создано')
                 close()
                 fetchData()
             })
+            .catch(() => message.error('Не удалось создать'))
         }
     }
 
     function removeEvent(recId) {
         apiService.delete('/event/' + recId).then(() => {
+            message.success('Мероприятие удалено');
             close()
             fetchData()
         })
+        .catch(() => message.error('Не удалось удалить'))
     }
 
     function close() {
@@ -573,7 +579,7 @@ function Events(props) {
                 <p><strong>Email:</strong> {selectedVolunteer.email}</p>
                 <p><strong>Телефон:</strong> {selectedVolunteer.phone_number}</p>
                 <p><strong>Описание:</strong> {selectedVolunteer.description}</p>
-                <p><strong>Навыки:</strong> {selectedVolunteer.skills}</p>
+                <p><strong>Навыки:</strong> {selectedVolunteer.skills ? selectedVolunteer.skills.join(', ') : '—'}</p>
                 <p><strong>Кол-во посещенных мероприятий:</strong> {selectedVolunteer.num_attended_events}</p>
                 <p><strong>Часы волонтерства:</strong> {selectedVolunteer.volunteer_hours}</p>
             </Modal>

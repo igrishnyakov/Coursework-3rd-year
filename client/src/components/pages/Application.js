@@ -207,7 +207,7 @@ function Applications(props) {
                 <p><strong>Email:</strong> {selectedVolunteer.email}</p>
                 <p><strong>Телефон:</strong> {selectedVolunteer.phone_number}</p>
                 <p><strong>Описание:</strong> {selectedVolunteer.description}</p>
-                <p><strong>Навыки:</strong> {selectedVolunteer.skills}</p>
+                <p><strong>Навыки:</strong> {selectedVolunteer.skills ? selectedVolunteer.skills.join(', ') : '—'}</p>
                 <p><strong>Кол-во посещенных мероприятий:</strong> {selectedVolunteer.num_attended_events}</p>
                 <p><strong>Часы волонтерства:</strong> {selectedVolunteer.volunteer_hours}</p>
             </Modal>

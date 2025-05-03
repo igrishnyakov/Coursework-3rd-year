@@ -1,6 +1,6 @@
 const Pool = require('pg').Pool
 
-// Создаем пул подключений с использованием переменных окружения
+// Пул подключений
 const pool = new Pool({
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || '2536',

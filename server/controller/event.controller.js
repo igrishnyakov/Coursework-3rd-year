@@ -1,5 +1,6 @@
 const db = require('../db')
 const { checkUserRole } = require('../utils/check-user-role')
+const { buildClusters } = require('../utils/clusterBuilder')
 const PdfPrinter = require('pdfmake')
 const fs = require('fs')
 const path = require('path')
@@ -22,14 +23,14 @@ class EventController {
             await db.query('BEGIN') // начало транзакции
 
             if (id) {
-                // Обновление существующего отчета
+                // Обновление существующего мероприятия
                 const updateQuery = 'UPDATE event SET organizer_id = $1, title = $2, image_path = $3, description = $4, start_date_time = $5, end_date_time = $6, num_volunteers = $7, tasks_volunteers = $8, conditions = $9 WHERE id = $10 RETURNING *'
                 const updateResult = await db.query(updateQuery, [organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, id])
                 eventItem = updateResult.rows[0]
 
                 await db.query('DELETE FROM category_event WHERE event_id = $1', [id])
             } else {
-                // Вставка нового отчета
+                // Вставка нового мероприятия
                 const insertQuery = 'INSERT INTO event (organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *'
                 const insertResult = await db.query(insertQuery, [organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions])
                 eventItem = insertResult.rows[0]
@@ -40,6 +41,8 @@ class EventController {
             }
 
             await db.query('COMMIT') // завершение транзакции
+            // пересчитает кластеры «в фоне»; если сломается — запишет в лог, пользователь всё равно получит сохранённое мероприятие
+            buildClusters().catch(err => console.error('buildClusters', err));
             res.json(eventItem)
         } catch (error) {
             await db.query('ROLLBACK') // откат в случае ошибки
@@ -96,6 +99,7 @@ class EventController {
             await db.query('DELETE FROM category_event WHERE event_id = $1', [id])
             await db.query(`DELETE FROM event WHERE id = $1`, [id])
             await db.query('COMMIT') // фиксация транзакции
+            buildClusters().catch(err => console.error('buildClusters', err)); // пересчет тайм кластеров
             res.json({ success: true, message: 'Event have been deleted.' })
         } catch (error) {
             await db.query('ROLLBACK') // откат в случае ошибки
@@ -115,13 +119,31 @@ class EventController {
         const eventId = req.params.id
         try {
             const query = `
-            SELECT *
+            SELECT  v.id,
+                    v.first_name,
+                    v.last_name,
+                    v.patronymic,
+                    v.image_path,
+                    v.email,
+                    v.phone_number,
+                    v.description,
+                    v.date_of_birth,
+                    COALESCE(
+                        array_agg(s.skill)
+                        FILTER (WHERE s.id IS NOT NULL), '{}'
+                    ) AS skills,
+                    v.num_attended_events,
+                    v.volunteer_hours
             FROM volunteer v
+            LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
+            LEFT JOIN skill s ON s.id = vs.skill_id
             JOIN (
                 SELECT volunteer_id FROM designated_volunteer WHERE event_id = $1
                 UNION
                 SELECT volunteer_id FROM application WHERE event_id = $1 AND status_id = 3
-            ) AS combined ON v.id = combined.volunteer_id`
+            ) AS combined ON v.id = combined.volunteer_id
+            GROUP BY v.id
+            `
             const volunteers = await db.query(query, [eventId])
             res.json(volunteers.rows)
         } catch (error) {
@@ -130,7 +152,27 @@ class EventController {
     }
     async getAllVolunteers(req, res) {
         try {
-            const query = 'SELECT * FROM volunteer'
+            const query = `
+            SELECT  v.id,
+                    v.first_name,
+                    v.last_name,
+                    v.patronymic,
+                    v.image_path,
+                    v.email,
+                    v.phone_number,
+                    v.description,
+                    v.date_of_birth,
+                    COALESCE(
+                        array_agg(s.skill ORDER BY s.skill)
+                        FILTER (WHERE s.id IS NOT NULL), '{}'
+                    ) AS skills,
+                    v.num_attended_events,
+                    v.volunteer_hours
+            FROM volunteer v
+            LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
+            LEFT JOIN skill s ON s.id = vs.skill_id
+            GROUP BY v.id
+            `
             const volunteers = await db.query(query)
             res.json(volunteers.rows)
         } catch (error) {

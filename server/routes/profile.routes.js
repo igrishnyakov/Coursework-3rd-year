@@ -7,5 +7,6 @@ router.post('/volunteer/:id/update', profileController.updateVolunteer)
 router.get('/organizer/:id', profileController.getOrganizer)
 router.post('/organizer/:id/update', profileController.updateOrganizer)
 router.post('/user/:id/updatePassword', profileController.updatePassword)
+router.get('/skills', profileController.getSkills);
 
 module.exports = router

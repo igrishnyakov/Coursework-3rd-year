@@ -5,33 +5,36 @@ class ApplicationController {
     async getApplications(req, res) {
         try {
             const query = `
-                SELECT
-                    a.id as application_id,
-                    v.id as volunteer_id,
-                    v.first_name,
-                    v.last_name,
-                    v.patronymic,
-                    v.image_path,
-                    v.email,
-                    v.phone_number,
-                    v.description,
-                    v.date_of_birth,
-                    v.skills,
-                    v.num_attended_events,
-                    v.volunteer_hours,
-                    s.status,
-                    e.title,
-                    e.num_volunteers,
-                    (SELECT COUNT(*) FROM designated_volunteer dv WHERE dv.event_id = e.id) +
-                    (SELECT COUNT(*) FROM application a2 WHERE a2.event_id = e.id AND a2.status_id = 3) AS current_volunteers
-                FROM
-                    application a
-                        JOIN
-                    volunteer v ON a.volunteer_id = v.id
-                        JOIN
-                    status s ON a.status_id = s.id
-                        JOIN
-                    event e ON a.event_id = e.id
+            SELECT
+                a.id AS application_id,
+                v.id AS volunteer_id,
+                v.first_name,
+                v.last_name,
+                v.patronymic,
+                v.image_path,
+                v.email,
+                v.phone_number,
+                v.description,
+                v.date_of_birth,
+                COALESCE(
+                    array_agg(s.skill ORDER BY s.skill)
+                    FILTER (WHERE s.id IS NOT NULL), '{}'
+                ) AS skills,
+                v.num_attended_events,
+                v.volunteer_hours,
+                st.status,
+                e.title,
+                e.num_volunteers,
+                (SELECT COUNT(*) FROM designated_volunteer dv WHERE dv.event_id = e.id) +
+                (SELECT COUNT(*) FROM application a2 WHERE a2.event_id = e.id AND a2.status_id = 3) AS current_volunteers
+            FROM application a
+            JOIN volunteer v ON v.id = a.volunteer_id
+            LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
+            LEFT JOIN skill s ON s.id = vs.skill_id
+            JOIN status st ON st.id = a.status_id
+            JOIN event e ON e.id = a.event_id
+            GROUP BY a.id, v.id, st.status, e.id
+            ORDER BY a.id;
             `
             const applications = await db.query(query)
             res.json(applications.rows)

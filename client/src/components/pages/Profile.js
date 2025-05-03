@@ -1,4 +1,4 @@
-import { Form, Input, Button, Modal, message } from 'antd'
+import { Form, Input, Button, Modal, message, Select } from 'antd'
 import { useEffect, useState } from 'react'
 import { ApiService } from '../../services/api.service'
 import moment from 'moment'
@@ -15,32 +15,68 @@ function Profile(props) {
     const [passwordForm] = Form.useForm()
     const [userInfo, setUserInfo] = useState(null)
     const [passwordModalVisible, setPasswordModalVisible] = useState(false)
+    const [allSkills, setAllSkills] = useState([])
+
+    const isVolunteer = props.currentUserInfo.role === 'vol';
 
     async function fetchUserInfo() {
-        const userId = props.currentUserInfo.id
-        const role = props.currentUserInfo.role
-        const endpoint = role === 'vol' ? `/volunteer/${userId}` : `/organizer/${userId}`
+        const id   = props.currentUserInfo.id;
+        const role = props.currentUserInfo.role;
+        const endpoint = role === 'vol'
+          ? `/volunteer/${id}`
+          : `/organizer/${id}`;
+    
         try {
-            const response = await apiService.get(endpoint)
-            setUserInfo(response)
+            // профиль + список навыков параллельно
+            const [profileResp, skillsResp] = await Promise.all([
+                apiService.get(endpoint),
+                apiService.get('/skills'),
+            ]);
+            setAllSkills(skillsResp);
+            setUserInfo(profileResp);
+            // начальные значения формы
             form.setFieldsValue({
-                ...response,
-                date_of_birth: response.date_of_birth ? moment(response.date_of_birth).format('YYYY-MM-DD') : null
-            })
-        } catch (error) {
-            message.error('Не удалось загрузить информацию пользователя')
+                ...profileResp,
+                date_of_birth: profileResp.date_of_birth
+                    ? moment(profileResp.date_of_birth).format('YYYY-MM-DD')
+                    : null,
+                // строковые навыки -> id
+                skills: profileResp.skills
+                    ? profileResp.skills.map(str => {
+                        const found = skillsResp.find(k => k.skill === str);
+                        return found ? found.id : null;
+                    })
+                    .filter(Boolean)
+                    : [],
+            });
+        } catch (err) {
+          message.error('Не удалось загрузить информацию пользователя');
         }
     }
 
     async function updateUserInfo(values) {
-        const userId = props.currentUserInfo.id
-        const role = props.currentUserInfo.role
-        const endpoint = role === 'vol' ? `/volunteer/${userId}/update` : `/organizer/${userId}/update`
-        apiService.post(endpoint, values).then(() => {
-            message.success('Информация обновлена')
-        }).catch(() => {
-            message.error('Не удалось обновить информацию')
-        })
+        const id   = props.currentUserInfo.id;
+        const role = props.currentUserInfo.role;
+        const endpoint = role === 'vol'
+            ? `/volunteer/${id}/update`
+            : `/organizer/${id}/update`;
+    
+        if (isVolunteer) {
+            values.skills = values.skills || []; // массив skillId
+        } else {
+            delete values.skills;
+        }
+    
+        apiService.post(endpoint, values)
+            .then(resp => {
+                if (resp.success) {
+                    message.success('Информация обновлена');
+                    setUserInfo(resp.profile); // сразу обновляем стейт
+                } else {
+                    message.error('Сервер вернул ошибку');
+                }
+            })
+            .catch(() => message.error('Не удалось обновить информацию'));
     }
 
     async function updatePassword(values) {
@@ -48,6 +84,7 @@ function Profile(props) {
         apiService.post(`/user/${userId}/updatePassword`, values).then(() => {
             setPasswordModalVisible(false)
             message.success('Пароль обновлен')
+            passwordForm.resetFields();
         }).catch(() => {
             message.error('Не удалось обновить пароль')
         })
@@ -126,7 +163,11 @@ function Profile(props) {
                     {props.currentUserInfo.role === 'vol' && (
                         <>
                             <Form.Item label="Навыки" name="skills">
-                                <Input/>
+                                <Select // возможно сделать как в Event
+                                    mode="multiple"
+                                    placeholder="Выберите навыки"
+                                    options={allSkills.map(k => ({ value: k.id, label: k.skill }))}
+                                />
                             </Form.Item>
                             <Form.Item label="Количество посещенных мероприятий" name="num_attended_events">
                                 <Input type="number" />

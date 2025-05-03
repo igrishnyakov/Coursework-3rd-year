@@ -10,9 +10,28 @@ class AuthController {
     async checkSession(req, res) {
         const sessionCookie = req.cookies['APP_SESSION']
         const userEmail = aes.decryptText(sessionCookie, cryptoKey)
-        const resultVol = await db.query(
-            'SELECT V.id, V.first_name, V.last_name, V.patronymic, V.image_path, V.email, V.phone_number, V.description, V.date_of_birth, V.skills, V.num_attended_events, V.volunteer_hours FROM volunteer V WHERE V.email = $1',
-            [userEmail]
+        const resultVol = await db.query(`
+            SELECT  V.id,
+                    V.first_name,
+                    V.last_name,
+                    V.patronymic,
+                    V.image_path,
+                    V.email,
+                    V.phone_number,
+                    V.description,
+                    V.date_of_birth,
+                    COALESCE(
+                        array_agg(S.skill)
+                        FILTER (WHERE S.id IS NOT NULL), '{}'
+                    ) AS skills,
+                    V.num_attended_events,
+                    V.volunteer_hours
+            FROM volunteer V
+            LEFT JOIN volunteer_skill VS ON VS.volunteer_id = V.id
+            LEFT JOIN skill S ON S.id = VS.skill_id
+            WHERE V.email = $1
+            GROUP BY V.id
+        `, [userEmail]
         )
         if (resultVol.rows[0]) {
             res.json({
@@ -64,8 +83,28 @@ class AuthController {
     }
     async login(req, res) {
         const userRecord = req.body
-        const resultVol = await db.query(
-            'SELECT V.id, V.first_name, V.last_name, V.patronymic, V.image_path, V.email, V.phone_number, V.description, V.date_of_birth, V.skills, V.num_attended_events, V.volunteer_hours FROM volunteer V WHERE V.email = $1 AND V.password = $2',
+        const resultVol = await db.query(`
+            SELECT  V.id,
+                    V.first_name,
+                    V.last_name,
+                    V.patronymic,
+                    V.image_path,
+                    V.email,
+                    V.phone_number,
+                    V.description,
+                    V.date_of_birth,
+                    COALESCE(
+                        array_agg(S.skill)
+                        FILTER (WHERE S.id IS NOT NULL), '{}'
+                    ) AS skills,
+                    V.num_attended_events,
+                    V.volunteer_hours
+            FROM volunteer V
+            LEFT JOIN volunteer_skill VS ON VS.volunteer_id = V.id
+            LEFT JOIN skill S ON S.id = VS.skill_id
+            WHERE V.email = $1 AND V.password = $2
+            GROUP BY V.id
+            `,
             [userRecord.email, md5(userRecord.password)]
         )
         let response
