@@ -1,6 +1,6 @@
 import { Card, Button, Modal, Form, Input, List, Select, Popconfirm, message, Tag } from 'antd'
 import { ApiService } from '../../services/api.service'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import moment from 'moment'
 import 'moment/locale/ru'
 import { saveAs } from 'file-saver'
@@ -24,6 +24,7 @@ function Events(props) {
     const [applicationStatus, setApplicationStatus] = useState(null) // статус заявки волонтера
     const [participationStatus, setParticipationStatus] = useState(null) // статус участия волонтера
     const [eventStatuses, setEventStatuses] = useState({}) // статус заявки волонтера для каждого мероприятия (на карточках)
+    const [sortMode, setSortMode] = useState(isUserVol ? 'recommended' : 'actual') // сортировка мероприятий
     //const [form] = Form.useForm();
     moment.locale('ru')
 
@@ -38,7 +39,12 @@ function Events(props) {
             })
         } else { // без параметра — добавление (EditModalVizible - добавление или редактирование)
             setEditModalVisible(true)
-            setItemRecord({ start_date_time: moment().format('YYYY-MM-DD HH:mm'), end_date_time: moment().format('YYYY-MM-DD HH:mm'), categories: itemRecord.categories || [] })
+            setItemRecord({
+                start_date_time: moment().format('YYYY-MM-DD HH:mm'),
+                end_date_time: moment().format('YYYY-MM-DD HH:mm'),
+                categories: itemRecord.categories || [],
+                rec_vol_hours: itemRecord.rec_vol_hours || 0
+            })
         }
     }
 
@@ -79,7 +85,10 @@ function Events(props) {
     }
 
     function fetchData() {
-        apiService.get('/events').then(res => {
+        const url = isUserVol
+            ? `/events?volunteerId=${props.currentUserInfo.id}`
+            : '/events';
+        apiService.get(url).then(res => {
             setItems(res)
             if (isUserVol) {
                 fetchEventStatuses(res)
@@ -111,7 +120,8 @@ function Events(props) {
     }
 
     function fetchAllVolunteers() {
-        apiService.get('/volunteers').then(res => {
+        const url = itemRecord.id ? `/volunteers?eventId=${itemRecord.id}` : '/volunteers';
+        apiService.get(url).then(res => {
             // Исключаем волонтеров, которые уже участвуют в мероприятии
             const availableVolunteers = res.filter(volunteer => !volunteers.some(v => v.id === volunteer.id))
             setAllVolunteers(availableVolunteers)
@@ -218,15 +228,34 @@ function Events(props) {
             })
     }
 
+    // отсортированный список мероприятий
+    const sortedItems = useMemo(() => {
+        const arr = [...items];
+        if (sortMode === 'recommended' && isUserVol) {
+            arr.sort((a, b) => {
+                const sA = a.score ?? -1;
+                const sB = b.score ?? -1;
+                if (sB !== sA) return sB - sA; // % ↓
+                return new Date(a.start_date_time) - new Date(b.start_date_time);
+            });
+        } else { // actual
+        arr.sort((a, b) =>
+            new Date(a.start_date_time) - new Date(b.start_date_time)); // ближайшие ↑
+        }
+        return arr;
+    }, [items, sortMode, isUserVol]);
+
     useEffect(() => {
         if (itemRecord.id) {
-            fetchEventVolunteers(itemRecord.id)
+            fetchEventVolunteers(itemRecord.id) // участники
+            fetchAllVolunteers(itemRecord.id);    // кандидаты с %‑баллом
         }
-        //fetchAllVolunteers()
     }, [itemRecord])
 
     useEffect(() => {
-        fetchAllVolunteers()
+        if (itemRecord.id) {
+            fetchAllVolunteers(itemRecord.id);
+        }
     }, [volunteers])
 
     useEffect(() => {
@@ -242,8 +271,20 @@ function Events(props) {
             ) : (
                 <></>
             )}
+            {/* селект сортировки у волонтёра */}
+            {isUserVol && (
+                <Select
+                    options={[
+                        { value: 'recommended', label: 'сначала рекомендуемые' },
+                        { value: 'actual',       label: 'сначала актуальные'   }
+                    ]}
+                    value={sortMode}
+                    onChange={v => setSortMode(v)}
+                    style={{ width: 220, margin: '0px 0 3px 8px' }}
+                />
+            )}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-around'}}>
-                {items.map(item => (
+                {sortedItems.map(item => (
                     <Card
                         key={item.id}
                         hoverable
@@ -268,6 +309,14 @@ function Events(props) {
                                 </>
                             }
                         />
+                        {isUserVol && item.score != null && (
+                            <Tag
+                                color={item.score >= 70 ? 'success' : 'default'}
+                                style={{ position: 'absolute', top: 15, right: 35, fontSize: '16px' }}
+                            >
+                                {`${Math.round(item.score)}%`}
+                            </Tag>
+                        )}
                         {isUserVol && eventStatuses[item.id] && (
                             <Tag color={
                                 eventStatuses[item.id] === 'одобрена' ? 'success' :
@@ -335,6 +384,7 @@ function Events(props) {
                     <p><strong>Кол-во волонтеров:</strong> {itemRecord.num_volunteers}</p>
                     <p><strong>Задачи волонтеров:</strong> {itemRecord.tasks_volunteers}</p>
                     <p><strong>Условия:</strong> {itemRecord.conditions}</p>
+                    <p><strong>Рекомендуемые волонтёрские часы:</strong> {itemRecord.rec_vol_hours ?? '—'}</p>
                 </div>
                     {isUserOrg && (
                         <>
@@ -362,6 +412,15 @@ function Events(props) {
                                             title={`${volunteer.last_name} ${volunteer.first_name}`}
                                             description={`Дата рождения: ${moment(volunteer.date_of_birth).format('DD.MM.YYYY')}`}
                                         />
+                                        {/* % подходимости волонтёра к мероприятию */}
+                                        {volunteer.score != null && (
+                                            <Tag
+                                                color={volunteer.score >= 70 ? 'success' : 'default'}
+                                                style={{ fontSize: '16px', marginRight: '400px' }}
+                                            >
+                                                {`${Math.round(volunteer.score)}%`}
+                                            </Tag>
+                                        )}
                                     </List.Item>
                                 )}
                             />
@@ -374,7 +433,18 @@ function Events(props) {
                             >
                                 {allVolunteers.map(volunteer => (
                                     <Select.Option key={volunteer.id} value={volunteer.id}>
-                                        {`${volunteer.last_name} ${volunteer.first_name}`}
+                                        {/*`${volunteer.last_name} ${volunteer.first_name}`*/}
+                                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                            <span>{`${volunteer.last_name} ${volunteer.first_name}`}</span>
+                                            {volunteer.score != null && (
+                                                <Tag
+                                                    color={volunteer.score >= 70 ? 'success' : 'default'}
+                                                    style={{ fontSize:'14px' }}
+                                                >
+                                                    {`${Math.round(volunteer.score)}%`}
+                                                </Tag>
+                                            )}
+                                        </div>
                                     </Select.Option>
                                 ))}
                             </Select>
@@ -536,6 +606,16 @@ function Events(props) {
                             }
                             rows={3}
                             value={itemRecord.conditions}
+                        />
+                    </Form.Item>
+                    <Form.Item label="Рекомендуемое кол-во волонтёрских часов">
+                        <Input
+                            type="number"
+                            disabled={!isUserOrg}
+                            onChange={v =>
+                                setItemRecord(prev => ({ ...prev, rec_vol_hours: v.target.value }))
+                            }
+                            value={itemRecord.rec_vol_hours}
                         />
                     </Form.Item>
                     <Form.Item label="URL изображения">

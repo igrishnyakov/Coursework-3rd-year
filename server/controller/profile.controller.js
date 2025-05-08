@@ -1,6 +1,7 @@
 const db = require('../db')
 const { checkUserRole } = require('../utils/check-user-role')
 const md5 = require('md5')
+const { buildScores } = require('../utils/scoreBuilder');
 
 class ProfileController {
     async getVolunteer(req, res) {
@@ -67,6 +68,8 @@ class ProfileController {
               );
             }
             await db.query('COMMIT');
+            // навыки/часы изменились -> пересчёт балла подходимости для этого волонтёра
+            buildScores({ volunteerId: id }).catch(err => console.error('buildScores(profile)', err));
             // возвращаем актуальный профиль
             const refreshed = await db.query(`
                 SELECT

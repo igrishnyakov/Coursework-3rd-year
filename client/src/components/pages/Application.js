@@ -133,6 +133,15 @@ function Applications(props) {
                                     </>
                                 }
                             />
+                            {/* % подходимости волонтёра к этому мероприятию */}
+                            {application.score != null && (
+                                <Tag
+                                    color={application.score >= 70 ? 'success' : 'default'}
+                                    style={{ fontSize: '16px', marginRight: '350px' }}
+                                >
+                                    {`${Math.round(application.score)}%`}
+                                </Tag>
+                            )}
                             {getStatusTag(application.status)}
                         </List.Item>
                     )}
@@ -175,6 +184,15 @@ function Applications(props) {
                                     </>
                                 }
                             />
+                            {/* % подходимости */}
+                            {application.score != null && (
+                                <Tag
+                                    color={application.score >= 70 ? 'success' : 'default'}
+                                    style={{ fontSize: '16px', marginRight: '470px' }}
+                                >
+                                    {`${Math.round(application.score)}%`}
+                                </Tag>
+                            )}
                             {getStatusTag(application.status)}
                         </List.Item>
                     )}

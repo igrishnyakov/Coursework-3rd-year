@@ -1,6 +1,7 @@
 const db = require('../db')
 const { checkUserRole } = require('../utils/check-user-role')
 const { buildClusters } = require('../utils/clusterBuilder')
+const { buildScores } = require('../utils/scoreBuilder');
 const PdfPrinter = require('pdfmake')
 const fs = require('fs')
 const path = require('path')
@@ -13,7 +14,7 @@ class EventController {
             return res.status(403).send('You do not have rights to create/update event!')
         }
 
-        const { id, organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, categories } = req.body
+        const { id, organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, categories, rec_vol_hours } = req.body
         let eventItem
         // Получение id категорий на основе их названий
         const categoryQuery = 'SELECT id FROM category WHERE category = ANY($1)'
@@ -24,15 +25,15 @@ class EventController {
 
             if (id) {
                 // Обновление существующего мероприятия
-                const updateQuery = 'UPDATE event SET organizer_id = $1, title = $2, image_path = $3, description = $4, start_date_time = $5, end_date_time = $6, num_volunteers = $7, tasks_volunteers = $8, conditions = $9 WHERE id = $10 RETURNING *'
-                const updateResult = await db.query(updateQuery, [organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, id])
+                const updateQuery = 'UPDATE event SET organizer_id = $1, title = $2, image_path = $3, description = $4, start_date_time = $5, end_date_time = $6, num_volunteers = $7, tasks_volunteers = $8, conditions = $9, rec_vol_hours = $10 WHERE id = $11 RETURNING *'
+                const updateResult = await db.query(updateQuery, [organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, rec_vol_hours, id])
                 eventItem = updateResult.rows[0]
 
                 await db.query('DELETE FROM category_event WHERE event_id = $1', [id])
             } else {
                 // Вставка нового мероприятия
-                const insertQuery = 'INSERT INTO event (organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *'
-                const insertResult = await db.query(insertQuery, [organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions])
+                const insertQuery = 'INSERT INTO event (organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, rec_vol_hours) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *'
+                const insertResult = await db.query(insertQuery, [organizer_id, title, image_path, description, start_date_time, end_date_time, num_volunteers, tasks_volunteers, conditions, rec_vol_hours])
                 eventItem = insertResult.rows[0]
             }
 
@@ -41,7 +42,10 @@ class EventController {
             }
 
             await db.query('COMMIT') // завершение транзакции
-            // пересчитает кластеры «в фоне»; если сломается — запишет в лог, пользователь всё равно получит сохранённое мероприятие
+
+            // пересчет баллов только для этого мероприятия
+            buildScores({ eventId: eventItem.id }).catch(err => console.error('buildScores(event)', err));
+            // пересчет кластеров «в фоне»; если сломается — запишет в лог, пользователь всё равно получит сохранённое мероприятие
             buildClusters().catch(err => console.error('buildClusters', err));
             res.json(eventItem)
         } catch (error) {
@@ -50,18 +54,27 @@ class EventController {
         }
     }
     async getEvents(req, res) {
+        const { volunteerId } = req.query;           // <- если прилетел id волонтёра
         try {
+            const params = [];
             const query = `
-        SELECT e.*, array_agg(c.category) as categories
-        FROM event e
-        LEFT JOIN category_event ce ON e.id = ce.event_id
-        LEFT JOIN category c ON ce.category_id = c.id
-        GROUP BY e.id
-        ORDER BY e.start_date_time DESC`
-            const items = await db.query(query)
-            res.json(items.rows)
-        } catch (error) {
-            res.status(500).send('Failed to retrieve events: ' + error.message)
+                SELECT  e.*,
+                    array_agg(c.category) AS categories
+                    ${volunteerId ? ', ms.score' : ''}
+                FROM event e
+                LEFT JOIN category_event ce ON ce.event_id = e.id
+                LEFT JOIN category c ON c.id = ce.category_id
+                ${volunteerId
+                    ? 'LEFT JOIN match_score ms ON ms.event_id = e.id AND ms.volunteer_id = $1'
+                    : ''}
+                GROUP BY e.id ${volunteerId ? ', ms.score' : ''}
+                ORDER BY e.start_date_time DESC`;
+
+            if (volunteerId) params.push(volunteerId);
+            const items = await db.query(query, params);
+            res.json(items.rows);
+        } catch (err) {
+            res.status(500).send('Failed to retrieve events: ' + err.message);
         }
     }
     async getOneEvent(req, res) {
@@ -99,7 +112,11 @@ class EventController {
             await db.query('DELETE FROM category_event WHERE event_id = $1', [id])
             await db.query(`DELETE FROM event WHERE id = $1`, [id])
             await db.query('COMMIT') // фиксация транзакции
-            buildClusters().catch(err => console.error('buildClusters', err)); // пересчет тайм кластеров
+             
+            // удаляем все строки из match_score для удаляемого события
+            await db.query('DELETE FROM match_score WHERE event_id = $1', [id]);
+            // пересчет тайм кластеров
+            buildClusters().catch(err => console.error('buildClusters', err)); 
             res.json({ success: true, message: 'Event have been deleted.' })
         } catch (error) {
             await db.query('ROLLBACK') // откат в случае ошибки
@@ -133,7 +150,8 @@ class EventController {
                         FILTER (WHERE s.id IS NOT NULL), '{}'
                     ) AS skills,
                     v.num_attended_events,
-                    v.volunteer_hours
+                    v.volunteer_hours,
+                    ms.score
             FROM volunteer v
             LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
             LEFT JOIN skill s ON s.id = vs.skill_id
@@ -142,7 +160,8 @@ class EventController {
                 UNION
                 SELECT volunteer_id FROM application WHERE event_id = $1 AND status_id = 3
             ) AS combined ON v.id = combined.volunteer_id
-            GROUP BY v.id
+            LEFT JOIN match_score ms ON ms.event_id = $1 AND ms.volunteer_id = v.id
+            GROUP BY v.id, ms.score
             `
             const volunteers = await db.query(query, [eventId])
             res.json(volunteers.rows)
@@ -152,6 +171,8 @@ class EventController {
     }
     async getAllVolunteers(req, res) {
         try {
+            const { eventId } = req.query;
+            const params   = [];
             const query = `
             SELECT  v.id,
                     v.first_name,
@@ -168,12 +189,17 @@ class EventController {
                     ) AS skills,
                     v.num_attended_events,
                     v.volunteer_hours
+                    ${eventId ? ', ms.score' : ''}
             FROM volunteer v
             LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
             LEFT JOIN skill s ON s.id = vs.skill_id
-            GROUP BY v.id
+            ${eventId
+                ? 'LEFT JOIN match_score ms ON ms.volunteer_id = v.id AND ms.event_id = $1'
+                : ''}
+            GROUP BY v.id ${eventId ? ', ms.score' : ''}
             `
-            const volunteers = await db.query(query)
+            if (eventId) params.push(eventId);
+            const volunteers = await db.query(query, params);
             res.json(volunteers.rows)
         } catch (error) {
             res.status(500).send('Failed to retrieve all volunteers: ' + error.message);
@@ -227,11 +253,14 @@ class EventController {
         try {
             const query = 'INSERT INTO application (volunteer_id, event_id, status_id) VALUES ($1, $2, $3) RETURNING *'
             const result = await db.query(query, [volunteerId, eventId, 1])
+            // история изменилась → пересчёт для одного волонтёра
+            buildScores({ volunteerId }).catch(err => console.error('buildScores(vol‑apply)', err));
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to apply for event: ' + error.message)
         }
     }
+
     async cancelApplication(req, res) {
         const userRole = await checkUserRole(req)
         if (userRole !== 'vol') {
@@ -244,11 +273,14 @@ class EventController {
         try {
             const query = 'DELETE FROM application WHERE volunteer_id = $1 AND event_id = $2 RETURNING *'
             const result = await db.query(query, [volunteerId, eventId])
+            // заявка снята → пересчёт для одного волонтёра
+            buildScores({ volunteerId }).catch(err => console.error('buildScores(vol‑cancel)', err));
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to cancel application for event: ' + error.message)
         }
     }
+
     async getVolunteerParticipationStatus(req, res) {
         const { id: eventId, volunteerId } = req.params
         try {

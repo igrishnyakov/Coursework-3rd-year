@@ -1,4 +1,5 @@
 const db = require('../db')
+const { buildScores } = require('../utils/scoreBuilder');
 const { checkUserRole } = require('../utils/check-user-role')
 
 class ApplicationController {
@@ -25,6 +26,7 @@ class ApplicationController {
                 st.status,
                 e.title,
                 e.num_volunteers,
+                ms.score,
                 (SELECT COUNT(*) FROM designated_volunteer dv WHERE dv.event_id = e.id) +
                 (SELECT COUNT(*) FROM application a2 WHERE a2.event_id = e.id AND a2.status_id = 3) AS current_volunteers
             FROM application a
@@ -32,8 +34,9 @@ class ApplicationController {
             LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
             LEFT JOIN skill s ON s.id = vs.skill_id
             JOIN status st ON st.id = a.status_id
+            LEFT JOIN match_score ms ON ms.event_id = a.event_id AND ms.volunteer_id = v.id
             JOIN event e ON e.id = a.event_id
-            GROUP BY a.id, v.id, st.status, e.id
+            GROUP BY a.id, v.id, st.status, e.id, ms.score
             ORDER BY a.id;
             `
             const applications = await db.query(query)
@@ -58,7 +61,8 @@ class ApplicationController {
                     e.num_volunteers,
                     e.tasks_volunteers,
                     e.conditions,
-                    s.status
+                    s.status,
+                    ms.score
                 FROM
                     application a
                         JOIN
@@ -66,13 +70,15 @@ class ApplicationController {
                         JOIN
                     status s ON a.status_id = s.id
                         LEFT JOIN
+                    match_score ms ON ms.event_id = e.id AND ms.volunteer_id = $1
+                        LEFT JOIN
                     category_event ce ON e.id = ce.event_id
                         LEFT JOIN
                     category c ON ce.category_id = c.id
                 WHERE
                     a.volunteer_id = $1
                 GROUP BY
-                    a.id, e.id, s.status
+                    a.id, e.id, s.status, ms.score
             `
             const applications = await db.query(query, [volunteerId])
             res.json(applications.rows)
@@ -98,6 +104,8 @@ class ApplicationController {
         try {
             const query = 'DELETE FROM application WHERE id = $1 RETURNING *'
             const result = await db.query(query, [applicationId])
+            // история волонтёра поменялась → пересчёт
+            buildScores({ volunteerId: result.rows[0].volunteer_id }).catch(err => console.error('buildScores(application‑cancel)', err));
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to cancel application: ' + error.message)
