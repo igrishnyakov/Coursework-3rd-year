@@ -1,5 +1,6 @@
 const db = require('../db')
 const { buildScores } = require('../utils/scoreBuilder');
+const { runSuggest } = require('../utils/suggestBuilder');
 const { checkUserRole } = require('../utils/check-user-role')
 
 class ApplicationController {
@@ -93,6 +94,12 @@ class ApplicationController {
         try {
             const query = 'UPDATE application SET status_id = $1 WHERE id = $2 RETURNING *'
             const result = await db.query(query, [statusId, applicationId])
+            // approve / reject
+            if (statusId === 3 || statusId === 2) {
+                const { rows:[{ event_id }] } = await db.query('SELECT event_id FROM application WHERE id = $1', [applicationId]);
+                const { rows:[{ cluster_id }] } = await db.query('SELECT cluster_id FROM event WHERE id = $1', [event_id]);
+                runSuggest({ clusterIds: cluster_id }).catch(console.error);
+            }
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to update application status: ' + error.message)
@@ -104,8 +111,30 @@ class ApplicationController {
         try {
             const query = 'DELETE FROM application WHERE id = $1 RETURNING *'
             const result = await db.query(query, [applicationId])
-            // история волонтёра поменялась → пересчёт
-            buildScores({ volunteerId: result.rows[0].volunteer_id }).catch(err => console.error('buildScores(application‑cancel)', err));
+
+            // 1. обновляем баллы подходимости
+            buildScores({ volunteerId: result.rows[0].volunteer_id }).catch(err => console.error('buildScores(application-cancel)', err));
+            // 2. собираем кластеры, где волонтёр ещё свободен
+            const freeClusters = await db.query(`
+                SELECT DISTINCT e.cluster_id
+                FROM event e
+                WHERE e.end_date_time >= now()
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT volunteer_id, event_id FROM designated_volunteer
+                        UNION
+                        SELECT volunteer_id, event_id FROM application WHERE status_id = 3
+                    ) z
+                    JOIN event e2 ON e2.id = z.event_id
+                    WHERE z.volunteer_id = $1 AND e2.cluster_id   = e.cluster_id )
+            `, [ volunteerId ]);
+
+            const clusterIds = freeClusters.rows.map(r => r.cluster_id);
+            if (clusterIds.length) {
+                runSuggest({ clusterIds }).catch(err => console.error('runSuggest(app-cancel)', err));
+            }
+
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to cancel application: ' + error.message)

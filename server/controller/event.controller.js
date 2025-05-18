@@ -2,6 +2,7 @@ const db = require('../db')
 const { checkUserRole } = require('../utils/check-user-role')
 const { buildClusters } = require('../utils/clusterBuilder')
 const { buildScores } = require('../utils/scoreBuilder');
+const { runSuggest } = require('../utils/suggestBuilder');
 const PdfPrinter = require('pdfmake')
 const fs = require('fs')
 const path = require('path')
@@ -22,6 +23,14 @@ class EventController {
         const categoryIds = categoryResult.rows.map(row => row.id)
         try {
             await db.query('BEGIN') // начало транзакции
+
+            // 1. определяем, в каком кластере было событие ДО изменений
+            let oldCid = null;
+            if (id) {
+                const { rows:[row] } = await db.query(
+                    'SELECT cluster_id FROM event WHERE id = $1', [id]);
+                oldCid = row ? row.cluster_id : null;
+            }
 
             if (id) {
                 // Обновление существующего мероприятия
@@ -45,8 +54,16 @@ class EventController {
 
             // пересчет баллов только для этого мероприятия
             buildScores({ eventId: eventItem.id }).catch(err => console.error('buildScores(event)', err));
-            // пересчет кластеров «в фоне»; если сломается — запишет в лог, пользователь всё равно получит сохранённое мероприятие
-            buildClusters().catch(err => console.error('buildClusters', err));
+            // пересчет кластера + подбор волонтеров
+            buildClusters().then(async () => {
+                // кластер этого мероприятия
+                const { rows:[{ cluster_id:newCid }] } = await db.query(
+                    'SELECT cluster_id FROM event WHERE id = $1', [eventItem.id]);
+                // если кластер поменялся → считаем оба
+                const uniq = new Set([ newCid, oldCid ].filter(x => x !== null));
+                await runSuggest({ clusterIds:[ ...uniq ] });
+            })
+            .catch(err => console.error('buildClusters / runSuggest', err));
             res.json(eventItem)
         } catch (error) {
             await db.query('ROLLBACK') // откат в случае ошибки
@@ -103,6 +120,9 @@ class EventController {
             return res.status(403).send('You do not have rights to delete event!')
         }
         const id = req.params.id
+        // запоминаем, в каком тайм-кластере было мероприятие
+        const { rows:[cidRow] } = await db.query('SELECT cluster_id FROM event WHERE id = $1', [id]);
+        const oldCid = cidRow ? cidRow.cluster_id : null;
         try {
             const eventCheckResult = await db.query('SELECT id FROM event WHERE id = $1', [id])
             if (eventCheckResult.rows.length === 0) {
@@ -113,10 +133,12 @@ class EventController {
             await db.query(`DELETE FROM event WHERE id = $1`, [id])
             await db.query('COMMIT') // фиксация транзакции
              
-            // удаляем все строки из match_score для удаляемого события
+            // удаляем все строки из match_score и старые рекомендации для удаляемого события
             await db.query('DELETE FROM match_score WHERE event_id = $1', [id]);
-            // пересчет тайм кластеров
-            buildClusters().catch(err => console.error('buildClusters', err)); 
+            await db.query('DELETE FROM suggested_assignment WHERE event_id = $1', [id]);
+            // пересчёт тайм-слотов, затем рекомендаций для «старого» cid
+            buildClusters().then(() => oldCid && runSuggest({ clusterIds: oldCid })).catch(err => console.error('buildClusters / runSuggest', err));
+
             res.json({ success: true, message: 'Event have been deleted.' })
         } catch (error) {
             await db.query('ROLLBACK') // откат в случае ошибки
@@ -217,6 +239,10 @@ class EventController {
                 await db.query('INSERT INTO designated_volunteer (volunteer_id, event_id) VALUES ($1, $2)', [volunteerId, eventId]);
             }
             await db.query('COMMIT')
+            // волонтёр стал недоступен → пересчёт подбора в кластере куда назначен
+            const { rows:[{ cluster_id }] } = await db.query(
+                'SELECT cluster_id FROM event WHERE id = $1', [eventId]);
+            runSuggest({ clusterIds: cluster_id }).catch(console.error);
             res.json({ success: true })
         } catch (error) {
             await db.query('ROLLBACK')
@@ -234,6 +260,10 @@ class EventController {
             await db.query('DELETE FROM designated_volunteer WHERE volunteer_id = $1 AND event_id = $2', [volunteerId, eventId]);
             await db.query('UPDATE application SET status_id = 2 WHERE volunteer_id = $1 AND event_id = $2', [volunteerId, eventId]);
             await db.query('COMMIT');
+            // волонтёр стал доступен → пересчёт в кластере откуда убран
+            const { rows:[{ cluster_id }] } = await db.query(
+                'SELECT cluster_id FROM event WHERE id = $1', [eventId]);
+            runSuggest({ clusterIds: cluster_id }).catch(console.error);
             res.json({ success: true });
         } catch (error) {
             await db.query('ROLLBACK');
@@ -253,8 +283,30 @@ class EventController {
         try {
             const query = 'INSERT INTO application (volunteer_id, event_id, status_id) VALUES ($1, $2, $3) RETURNING *'
             const result = await db.query(query, [volunteerId, eventId, 1])
-            // история изменилась → пересчёт для одного волонтёра
+            // история изменилась → пересчет для одного волонтера
             buildScores({ volunteerId }).catch(err => console.error('buildScores(vol‑apply)', err));
+
+            // 1. собираем ВСЕ кластеры, где волонтер еще свободен
+            const freeClustersRes = await db.query(`
+                SELECT DISTINCT e.cluster_id
+                FROM event e
+                WHERE e.end_date_time >= now()
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT volunteer_id, event_id FROM designated_volunteer
+                        UNION
+                        SELECT volunteer_id, event_id FROM application WHERE status_id = 3
+                    ) z
+                    JOIN event e2 ON e2.id = z.event_id
+                    WHERE z.volunteer_id = $1 AND e2.cluster_id = e.cluster_id
+                )
+            `, [ volunteerId ]);
+            const clusterIds = freeClustersRes.rows.map(r => r.cluster_id);
+            // 2. пересчитываем рекомендации во всех найденных кластерах
+            if (clusterIds.length)
+                runSuggest({ clusterIds }).catch(console.error);
+
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to apply for event: ' + error.message)
@@ -273,8 +325,30 @@ class EventController {
         try {
             const query = 'DELETE FROM application WHERE volunteer_id = $1 AND event_id = $2 RETURNING *'
             const result = await db.query(query, [volunteerId, eventId])
-            // заявка снята → пересчёт для одного волонтёра
+            // заявка снята → пересчет для одного волонтера
             buildScores({ volunteerId }).catch(err => console.error('buildScores(vol‑cancel)', err));
+
+            // 1. собираем ВСЕ кластеры, где волонтер еще свободен
+            const freeClustersRes = await db.query(`
+                SELECT DISTINCT e.cluster_id
+                FROM event e
+                WHERE e.end_date_time >= now()
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT volunteer_id, event_id FROM designated_volunteer
+                        UNION
+                        SELECT volunteer_id, event_id FROM application WHERE status_id = 3
+                    ) z
+                    JOIN event e2 ON e2.id = z.event_id
+                    WHERE z.volunteer_id = $1 AND e2.cluster_id = e.cluster_id
+                )
+            `, [ volunteerId ]);
+            const clusterIds = freeClustersRes.rows.map(r => r.cluster_id);
+            // 2. пересчитываем рекомендации во всех найденных кластерах
+            if (clusterIds.length)
+                runSuggest({ clusterIds }).catch(console.error);
+
             res.json(result.rows[0])
         } catch (error) {
             res.status(500).send('Failed to cancel application for event: ' + error.message)

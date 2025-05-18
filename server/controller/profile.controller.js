@@ -2,6 +2,7 @@ const db = require('../db')
 const { checkUserRole } = require('../utils/check-user-role')
 const md5 = require('md5')
 const { buildScores } = require('../utils/scoreBuilder');
+const { runSuggest } = require('../utils/suggestBuilder');
 
 class ProfileController {
     async getVolunteer(req, res) {
@@ -59,7 +60,7 @@ class ProfileController {
                 id
               ]
             );
-            /* — перезаписываем список навыков — */
+            // перезаписываем список навыков
             await db.query('DELETE FROM volunteer_skill WHERE volunteer_id = $1', [id]);
             for (const skillId of skills) {
               await db.query(
@@ -70,6 +71,32 @@ class ProfileController {
             await db.query('COMMIT');
             // навыки/часы изменились -> пересчёт балла подходимости для этого волонтёра
             buildScores({ volunteerId: id }).catch(err => console.error('buildScores(profile)', err));
+
+            // выясняем, где волонтёр свободен
+            const freeClustersRes = await db.query(`
+                SELECT DISTINCT e.cluster_id
+                FROM event e
+                WHERE e.end_date_time >= now()
+                    -- нет назначений и одобренных заявок этого волонтёра в том же кластере
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM (
+                            SELECT volunteer_id, event_id FROM designated_volunteer
+                            UNION
+                            SELECT volunteer_id, event_id FROM application WHERE status_id = 3
+                        ) z
+                        JOIN event e2 ON e2.id = z.event_id
+                        WHERE z.volunteer_id = $1 AND e2.cluster_id = e.cluster_id
+                    )`,
+                [ id ]
+            );
+            const clusterIds = freeClustersRes.rows.map(r => r.cluster_id);
+
+            // пересчёт рекомендаций только в найденных кластерах
+            if (clusterIds.length) {
+                runSuggest({ clusterIds }).catch(err => console.error('runSuggest(profile)', err));
+            }
+
             // возвращаем актуальный профиль
             const refreshed = await db.query(`
                 SELECT
