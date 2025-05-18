@@ -19,4 +19,7 @@ router.get('/event/:id/participation-status/:volunteerId', eventController.getVo
 
 router.get('/event/:id/report', eventController.generatePdfReport)
 
+router.get('/event/:id/recommended', eventController.getRecommendedVols)
+router.post('/event/:id/assign-recommended', eventController.assignRecommended)
+
 module.exports = router

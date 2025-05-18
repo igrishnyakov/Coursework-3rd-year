@@ -1,4 +1,4 @@
-import { Card, Button, Modal, Form, Input, List, Select, Popconfirm, message, Tag } from 'antd'
+import { Card, Button, Modal, Form, Input, List, Select, Popconfirm, message, Tag, Divider } from 'antd'
 import { ApiService } from '../../services/api.service'
 import { useEffect, useState, useMemo } from 'react'
 import moment from 'moment'
@@ -25,6 +25,7 @@ function Events(props) {
     const [participationStatus, setParticipationStatus] = useState(null) // статус участия волонтера
     const [eventStatuses, setEventStatuses] = useState({}) // статус заявки волонтера для каждого мероприятия (на карточках)
     const [sortMode, setSortMode] = useState(isUserVol ? 'recommended' : 'actual') // сортировка мероприятий
+    const [recommended, setRecommended]   = useState([]); // рекомендуемые для участия вол
     //const [form] = Form.useForm();
     moment.locale('ru')
 
@@ -214,6 +215,10 @@ function Events(props) {
         })
     }
 
+    function fetchRecommended(eventId) {
+        apiService.get(`/event/${eventId}/recommended`).then(setRecommended).catch(()=>message.error('Не удалось получить рекомендации'));
+    }
+
     function generateReport(eventId) {
         fetch(`http://localhost:3001/api/event/${eventId}/report`, {
             method: 'GET',
@@ -247,14 +252,23 @@ function Events(props) {
 
     useEffect(() => {
         if (itemRecord.id) {
-            fetchEventVolunteers(itemRecord.id) // участники
-            fetchAllVolunteers(itemRecord.id);    // кандидаты с %‑баллом
+            // 1. участники мероприятия
+            fetchEventVolunteers(itemRecord.id);
+            // 2. список всех доступных волонтёров (для селекта «Добавить»)
+            fetchAllVolunteers(itemRecord.id);
+            // 3. рекомендации — нужны только организатору
+            if (isUserOrg) {
+                fetchRecommended(itemRecord.id);
+            }
         }
     }, [itemRecord])
 
     useEffect(() => {
         if (itemRecord.id) {
             fetchAllVolunteers(itemRecord.id);
+            if (isUserOrg) {
+                fetchRecommended(itemRecord.id); // обновление списка рекомендуемых
+            }
         }
     }, [volunteers])
 
@@ -458,6 +472,46 @@ function Events(props) {
                                 style={{marginTop: '10px'}}
                             >
                                 Добавить волонтеров
+                            </Button>
+                            <Divider style={{margin:'30px 0'}} />
+                        </>
+                    )}
+                    {isUserOrg && (
+                        <>
+                            <h3>Рекомендуемые к назначению</h3>
+                            <List
+                                itemLayout="horizontal"
+                                dataSource={recommended}
+                                locale={{emptyText:'Нет рекомендаций'}}
+                                renderItem={vol => (
+                                    <List.Item onClick={()=>showVolunteerModal(vol)}>
+                                        <List.Item.Meta
+                                            title={`${vol.last_name} ${vol.first_name}`}
+                                            description={`Дата рождения: ${moment(vol.date_of_birth).format('DD.MM.YYYY')}`}
+                                        />
+                                        {vol.score != null && (
+                                            <Tag color={vol.score >= 70 ? 'success' : 'default'} style={{ fontSize:'16px', marginRight:'540px' }}>
+                                                {`${Math.round(vol.score)}%`}
+                                            </Tag>
+                                        )}
+                                    </List.Item>
+                                )}
+                            />
+                            <Button type="primary"
+                                    disabled={!recommended.length}
+                                    onClick={()=>{
+                                        apiService.post(`/event/${itemRecord.id}/assign-recommended`).then(r=>{
+                                            if(r.success){
+                                                message.success(`Назначено ${r.added} волонтёров`);
+                                                fetchEventVolunteers(itemRecord.id);
+                                                fetchRecommended(itemRecord.id); // обновится в 0
+                                            }else{
+                                                message.info(r.message);
+                                            }
+                                        })
+                                        .catch(()=>message.error('Не удалось назначить'));
+                                    }}>
+                                Назначить всех
                             </Button>
                         </>
                     )}

@@ -468,6 +468,74 @@ class EventController {
             res.status(500).send('Failed to generate report: ' + error.message);
         }
     }
+
+    async getRecommendedVols(req,res) {
+        const eventId = req.params.id;
+        try {
+            const q = `
+            SELECT v.id, v.first_name, v.last_name, v.patronymic,
+                v.image_path, v.date_of_birth,
+                array_agg(s.skill ORDER BY s.skill) FILTER (WHERE s.id IS NOT NULL) AS skills,
+                v.volunteer_hours, ms.score
+            FROM suggested_assignment sa
+            JOIN volunteer v ON v.id = sa.volunteer_id
+            LEFT JOIN volunteer_skill vs ON vs.volunteer_id = v.id
+            LEFT JOIN skill s         ON s.id = vs.skill_id
+            LEFT JOIN match_score ms  ON ms.event_id = sa.event_id AND ms.volunteer_id = v.id
+            WHERE sa.event_id = $1
+            GROUP BY v.id, ms.score
+            ORDER BY ms.score DESC NULLS LAST`;
+            const { rows } = await db.query(q,[eventId]);
+            res.json(rows);
+        }catch(err) {
+            res.status(500).send('Failed: '+err.message);
+        }
+    }
+
+    async assignRecommended(req,res) {
+        const userRole = await checkUserRole(req);
+        if (userRole !== 'org') return res.status(403).send('Forbidden');
+
+        const eventId = req.params.id;
+        try {
+            await db.query('BEGIN');
+
+            // все ещё свободные рекомендации
+            const { rows: recs } = await db.query(
+            `SELECT volunteer_id FROM suggested_assignment sa
+             WHERE sa.event_id = $1
+             AND NOT EXISTS (
+                SELECT 1 FROM designated_volunteer dv
+                WHERE dv.volunteer_id = sa.volunteer_id AND dv.event_id = $1)`,
+            [eventId]);
+
+        if(!recs.length) {
+            await db.query('ROLLBACK');
+            return res.json({ success:false, message:'Нет рекомендуемых или все уже назначены' });
+        }
+
+        // массовая вставка
+        const vals = recs.map((_,i)=>`($1,$${i+2})`).join(',');
+        await db.query(
+            `INSERT INTO designated_volunteer(event_id, volunteer_id)
+             VALUES ${vals}
+             ON CONFLICT DO NOTHING`,
+        [eventId, ...recs.map(r=>r.volunteer_id)]);
+
+        // очистка рекомендованных именно для этого события
+        await db.query('DELETE FROM suggested_assignment WHERE event_id = $1', [eventId]);
+        await db.query('COMMIT');
+
+        // пересчёт подборки в кластере
+        const { rows:[{ cluster_id }] } = await db.query('SELECT cluster_id FROM event WHERE id = $1', [eventId]);
+        runSuggest({ clusterIds: cluster_id }).catch(console.error);
+
+        res.json({ success:true, added: recs.length });
+        } catch(err) {
+            await db.query('ROLLBACK');
+            res.status(500).send('Failed to assign: '+err.message);
+        }
+    }
 }
 
 module.exports = new EventController()
