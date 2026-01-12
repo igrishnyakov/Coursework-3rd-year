@@ -133,16 +133,18 @@ function Applications(props) {
                                     </>
                                 }
                             />
+                            <div style={{ width: 130, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '60px' }}>
                             {/* % подходимости волонтёра к этому мероприятию */}
                             {application.score != null && (
                                 <Tag
                                     color={application.score >= 70 ? 'success' : 'default'}
-                                    style={{ fontSize: '16px', marginRight: '350px' }}
+                                    style={{ fontSize: '16px'}}
                                 >
                                     {`${Math.round(application.score)}%`}
                                 </Tag>
                             )}
                             {getStatusTag(application.status)}
+                            </div>
                         </List.Item>
                     )}
                 />

@@ -114,7 +114,7 @@ class ApplicationController {
 
             // 1. обновляем баллы подходимости
             buildScores({ volunteerId: result.rows[0].volunteer_id }).catch(err => console.error('buildScores(application-cancel)', err));
-            // 2. собираем кластеры, где волонтёр ещё свободен
+            // 2. собираем кластеры, где волонтер ещё свободен
             const freeClusters = await db.query(`
                 SELECT DISTINCT e.cluster_id
                 FROM event e

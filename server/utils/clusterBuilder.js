@@ -1,8 +1,11 @@
 const db = require('../db');
 
+// общая асимптотика: O(n*log(n) + e), n - кол-во мероприятий, e - кол-во пересечений мер (ребер в графе)
+// лучший случай (события не пересекаются) - O(n*log(n))
+// худший случай (все пересекаются) - O(n²)
 async function buildClusters() {
-  // 1. берём все события, которые ещё идут или впереди
-  const { rows: events } = await db.query(
+  // 1. берем только текущие и будущие мероприятия - O(n)
+  const { rows: events } = await db.query( // events - массив текущих и будущих мероприятий мероприятий
     `SELECT id, start_date_time AS start, end_date_time AS finish
        FROM event
       WHERE end_date_time >= now()`
@@ -11,51 +14,60 @@ async function buildClusters() {
   const n = events.length;
   if (n === 0) return { updated: 0 };
 
-  // 2. построение графа пересечений с помощью алгоритма sweep‑line
-  // Каждое событие даёт две точки: (start,+1) и (finish,-1)
-  const points = [];
-  events.forEach((ev, idx) => {
-    points.push({ t: ev.start, type: +1, idx });
-    points.push({ t: ev.finish, type: -1, idx });
+  // 2. Построение графа пересечений (вершины - мероприятия, ребра - пересечения мероприятий по времени)
+  
+  // Алгоритм "sweep-line" (сканирующей линии)
+  // Нужно определить, какие мероприятия пересекаются по времени, чтобы связать их ребрами в графе
+  const points = []; // points - массив временных точек (для sweep-line)
+  events.forEach((ev, idx) => { // каждое пероприятие добавляет две точки - O(n)
+    points.push({ t: ev.start, type: +1, idx }); // старт (дата и время) мероприятия (+1), idx - id мерпориятия
+    points.push({ t: ev.finish, type: -1, idx }); // конец (дата и время) мероприятия (-1)
   });
-  points.sort((a, b) => a.t - b.t || a.type - b.type);
+  points.sort((a, b) => a.t - b.t || a.type - b.type); // сортировка точек по времени, если у точек время одинаковое, то сначала старт (+1), затем конец (-1) - O(n log n)
 
-  // 3. Построение графа смежности
   const active = new Set();
-  const adj = Array.from({ length: n }, () => new Set());
+  // Вершины 0, ..., n-1, ссылаются на события в events
+  const adj = Array.from({ length: n }, () => new Set()); // список смежности неориентированного графа пересечений (множество индексов событий, которые пересекаются с событием i)
 
-  for (const p of points) {
-    if (p.type === +1) {
-      for (const j of active) {
-        adj[p.idx].add(j);
-        adj[j].add(p.idx);
+  // Построение ребер - O(e), e - кол-во ребер (худший случай - e = n²)
+  for (const p of points) { // обходим все временные точки слева-направо (по времени)
+    if (p.type === +1) { // мероприятие p.idx началось -> связываем его со всем "активными"(начались и не закончились) мероприятиями
+      for (const j of active) { // идем по всем активным мероприятиям
+        adj[p.idx].add(j); // доб ребро между p.idx и j
+        adj[j].add(p.idx); // и в другую сторону (неориентированный граф)
       }
-      active.add(p.idx);
-    } else {
-      active.delete(p.idx);
+      active.add(p.idx); // добавляем в список "активных"
+    } else { // мероприятие закончилось
+      active.delete(p.idx); // удаляем из "активных"
     }
   }
 
-  // 4. Поиск компонент связности с помощью BFS
-  const clusterIdByIdx = Array(n).fill(null);
-  let clusterCounter = 0;
-  for (let i = 0; i < n; i++) {
-    if (clusterIdByIdx[i] !== null) continue;
-    const cid = ++clusterCounter;
-    const stack = [i];
-    clusterIdByIdx[i] = cid;
-    while (stack.length) {
-      const v = stack.pop();
-      for (const nb of adj[v]) {
-        if (clusterIdByIdx[nb] === null) {
-          clusterIdByIdx[nb] = cid;
-          stack.push(nb);
+  // 3. Поиск компонент связности (тайм-кластеров) с помощью DFS - O(n + e), худший e = 0, лучший e = n².
+  const clusterIdByIdx = Array(n).fill(null); // id кластера, к которому относится мероприятие i
+  let clusterCounter = 0; // номер текущего кластера
+
+  for (let i = 0; i < n; i++) { // обход всех мер
+    if (clusterIdByIdx[i] !== null) continue; // если у мер уже определен кластер, пропускаем
+
+    // начало новой компоненты (кластера)
+    const cid = ++clusterCounter; // создание нового кластера
+    const stack = [i]; // мер i помещаем в стек для обхода
+    clusterIdByIdx[i] = cid; // i принадлежит новому кластеру
+
+    // DFS через стек
+    while (stack.length) { // пока есть вершины в стеке
+      const v = stack.pop(); // берем вершину из стека
+      for (const nb of adj[v]) { // обходим всех соседей вершины из списка смежности (которые пересекаются по времени)
+        if (clusterIdByIdx[nb] === null) { // если у соседа нет кластера
+          clusterIdByIdx[nb] = cid; // помечаем текущим кластером
+          stack.push(nb); // в стек для последующего обхода
         }
       }
     }
+
   }
 
-// 5. Обновление events
+// 4. Обновление events - O(n)
 const updates = events.map((ev, i) => ({ id: ev.id, cid: clusterIdByIdx[i] }));
 
 const valuesSql = updates
@@ -78,7 +90,7 @@ await db.query(
 
 module.exports = { buildClusters };
 
-// 6. Автозапуск при вызове напрямую (node clusterBuilder.js)
+// Автозапуск при вызове напрямую (node clusterBuilder.js)
 if (require.main === module) {
   buildClusters()
     .then(r => {
